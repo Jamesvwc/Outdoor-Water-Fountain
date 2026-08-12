@@ -27,9 +27,9 @@ while (webcam.isOpened()):
     ret, frame = webcam.read()
     if ret == True:
 
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        frame_stack = np.stack([frame] * 3, axis = -1)
-        webcam_out.write(frame_stack)
+        # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        # frame_stack = np.stack([frame] * 3, axis = -1)
+        # webcam_out.write(frame_stack)
 
         cv2.imshow('Webcam', frame)
         key = cv2.waitKey(5)
@@ -39,4 +39,4 @@ while (webcam.isOpened()):
         break
 
 webcam.release()
-webcam_out.release()
+# webcam_out.release()
