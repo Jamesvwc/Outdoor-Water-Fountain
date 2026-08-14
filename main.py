@@ -114,13 +114,11 @@ import time
 
 class AnimalDetection:
     
-    def __init__(self, camera_index=0, min_area=2000):
+    def __init__(self, camera_index=0, model_dims=(300, 300), min_area=2000):
         self.captured = cv.VideoCapture(camera_index)
-        cam_width = int(self.captured.get(cv.CAP_PROP_FRAME_WIDTH))
-        cam_height = int(self.captured.get(cv.CAP_PROP_FRAME_HEIGHT))
-        self.resize_dims = (cam_width, cam_height)
+        self.resize_dims = model_dims
         self.min_area = min_area
-        self.fgbg = cv.createBackgroundSubtractorMOG2(history=750, varThreshold=16, detectShadows=True)
+        self.fgbg = cv.createBackgroundSubtractorMOG2(history=750, varThreshold=40, detectShadows=True)
 
     def get_frame(self):
         success, frame = self.captured.read()
@@ -129,18 +127,36 @@ class AnimalDetection:
         return None
     
     def motion_detected(self, frame):
-        frame = cv.cvtColor(frame, cv.COLOR_BGR2GRAY) #convert from bgr to gray for easier processing
-        masked_image = self.bg.subtractor.apply(frame)
+        gray_frame = cv.cvtColor(frame, cv.COLOR_BGR2GRAY) #convert from bgr to gray for easier processing
+        # gray_frame = cv.GaussianBlur(gray_frame, (5, 5), 0)
+        masked_image = self.fgbg.apply(gray_frame, learningRate=0.001)
         _, polished_image = cv.threshold(masked_image, 200, 255, cv.THRESH_BINARY)
-        polished_image = cv.morphologyEx(masked_image, cv.MORPH_OPEN, np.ones((3,3), np.uint8))
+        polished_image = cv.morphologyEx(polished_image, cv.MORPH_OPEN, np.ones((3,3), np.uint8))
+        polished_image = cv.dilate(polished_image, np.ones((5,5), np.uint8), iterations=2)
 
-        #contours
+        # #contours
         contours = cv.findContours(polished_image, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
         contours = imutils.grab_contours(contours)
+        motion = False
+        results = []
         for c in contours:
-            if (cv.contourArea(c) > self.min_area): #ie. there is an acceptable amount of motion
-                return True 
-        return False
+            if (cv.contourArea(c) < self.min_area):
+                continue #ie. not enough motion
+            motion = True
+            (x, y, w, h) = cv.boundingRect(c)
+            cv.rectangle(frame, (x,y), (x+w, y+h), (0, 255, 0), 2)
+            results.append((x, y, w, h))
+
+        cv.imshow('test', frame)
+        cv.waitKey(50)
+        self.last_mask = polished_image
+        self.last_results = results
+        return motion
+    
+    def show_camera_feed(self, frame):
+        display_frame = frame.copy()
+        for (x, y, w, h) in getattr(self, 'last_boxes', []):
+            cv.rectangle(display_frame, (x,y), (x+w, y+h), (0, 255, 0, 2))
     
     def preprocess_frame_for_model(self, frame):
         resized_frame = cv.resize(frame, self.resize_dims) #resize images from camera for model to read
@@ -151,29 +167,40 @@ class AnimalDetection:
     def release(self):
         self.captured.release()
 
-class AnimalClassification:
+# class AnimalClassification:
 
-    def __init__(self, model_path, label_path, threshold=0.5):
-        self.interpreter = tf.lite.Interpreter(model_path=model_path)
-        self.interpreter.allocate_tensors()
-        self.input_details = self.interpreter.get_input_details()
-        self.output_details = self.interpreter.get_output.details()
-        self.labels = self._load_labels(label_path)
-        self.threshold = threshold
+#     def __init__(self, model_path, label_path, threshold=0.5):
+#         self.interpreter = tf.lite.Interpreter(model_path=model_path)
+#         self.interpreter.allocate_tensors()
+#         self.input_details = self.interpreter.get_input_details()
+#         self.output_details = self.interpreter.get_output.details()
+#         self.labels = self._load_labels(label_path)
+#         self.threshold = threshold
 
-    def _load_labels(self, path):
-        with open(path, 'r') as f:
-            return [line_strip() for line in f.readlines()]
+#     def _load_labels(self, path):
+#         with open(path, 'r') as f:
+#             return [line_strip() for line in f.readlines()]
         
-    def predict(self, preprocessed_frame):
-        self.interpreter.set_tensor(self.input_details[0]['index'], preprocessed_frame)
-        self.interpreter.invoke()
-        output = self.interpreter.get_tensor(self.output_details[0]['index'])
-        results = []
-        for i, score in enumerate(output[0]):
-            if score > self.threshold:
-                results.append((self.labels[i], float(score)))
-        return sorted(results, key=lambda x: x[1], reverse=True)
+#     def predict(self, preprocessed_frame):
+#         self.interpreter.set_tensor(self.input_details[0]['index'], preprocessed_frame)
+#         self.interpreter.invoke()
+#         output = self.interpreter.get_tensor(self.output_details[0]['index'])
+#         results = []
+#         for i, score in enumerate(output[0]):
+#             if score > self.threshold:
+#                 results.append((self.labels[i], float(score)))
+#         return sorted(results, key=lambda x: x[1], reverse=True)
 
 def main():
     camera = AnimalDetection(camera_index=0)
+
+    while True:
+        frame = camera.get_frame()
+        if (frame is None): #camera has not been opened yet
+            continue
+
+        if (camera.motion_detected(frame)):
+            continue
+        
+if __name__ == "__main__":
+    main()
