@@ -128,10 +128,9 @@ class AnimalDetection:
     
     def motion_detected(self, frame):
         gray_frame = cv.cvtColor(frame, cv.COLOR_BGR2GRAY) #convert from bgr to gray for easier processing
-        # gray_frame = cv.GaussianBlur(gray_frame, (5, 5), 0)
         masked_image = self.fgbg.apply(gray_frame, learningRate=0.001)
         _, polished_image = cv.threshold(masked_image, 200, 255, cv.THRESH_BINARY)
-        polished_image = cv.morphologyEx(polished_image, cv.MORPH_OPEN, np.ones((3,3), np.uint8))
+        polished_image = cv.morphologyEx(polished_image, cv.MORPH_OPEN, np.ones((3, 3), np.uint8))
         polished_image = cv.dilate(polished_image, np.ones((5,5), np.uint8), iterations=2)
 
         # #contours
@@ -152,6 +151,17 @@ class AnimalDetection:
         self.last_mask = polished_image
         self.last_results = results
         return motion
+    
+    # def motion_detected(self, frame):
+    #     fg_mask = self.fgbg.apply(frame)
+    #     fg_mask = cv.morphologyEx(fg_mask, cv.MORPH_OPEN, np.ones((3,3), np.uint8))
+    #     contours, _ = cv.findContours(fg_mask, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+    #     for c in contours:
+    #         if cv.contourArea(c) > self.min_area:
+    #             return True
+    #     cv.imshow('video', frame)
+    #     cv.waitKey(40)
+    #     return False
     
     def show_camera_feed(self, frame):
         display_frame = frame.copy()
